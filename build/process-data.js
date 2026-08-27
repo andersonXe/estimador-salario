@@ -1,144 +1,126 @@
-// Processa os dados brutos da Pesquisa Código Fonte TV 2026 em médias ponderadas
-// e índices multiplicadores por categoria, prontos para uso na calculadora estática.
+// Gera public/salary-data.js: médias e índices por categoria, dispersão real (percentis),
+// pesos de combinação medidos nas tabelas cruzadas e parâmetros de incerteza amostral.
+//
+// Uso: npm run build-data
 const fs = require("fs");
 const path = require("path");
+const {
+  weightedMeansByColumn,
+  overallWeightedMean,
+  overallDispersionStats,
+  dispersionForColumn,
+  dispersionOverall,
+} = require("./lib/stats");
+const { measureAttenuations } = require("./lib/attenuation");
+const { loadSurvey } = require("./lib/load");
 
-const DATA_DIR = path.join(__dirname, "..", "data");
 const OUT_DIR = path.join(__dirname, "..", "public");
+const data = loadSurvey();
 
-const raw2026 = JSON.parse(fs.readFileSync(path.join(DATA_DIR, "survey-2026-raw.json"), "utf8"));
-const frameworks2026 = JSON.parse(fs.readFileSync(path.join(DATA_DIR, "survey-2026-frameworks.json"), "utf8"));
-const raw2025 = JSON.parse(fs.readFileSync(path.join(DATA_DIR, "survey-2025-raw.json"), "utf8"));
+const { mean: overallMean, n: totalResponses } = overallWeightedMean(data.raw.salary_by_level);
+const overallStats = overallDispersionStats(data.raw.salary_by_level);
+const overallDisp = dispersionOverall(data.raw.salary_by_level);
 
-// Ponto médio de cada faixa salarial (em R$). A última faixa é aberta ("Acima de 50.000"),
-// usamos um valor representativo conservador em vez do dobro do teto anterior.
-const BRACKET_MIDPOINTS = {
-  "Ate 1.000": 800,
-  "Entre 1.001 e 2.000": 1500,
-  "Entre 2.001 e 3.000": 2500,
-  "Entre 3.001 e 4.000": 3500,
-  "Entre 4.001 e 5.000": 4500,
-  "Entre 5.001 e 6.000": 5500,
-  "Entre 6.001 e 7.000": 6500,
-  "Entre 7.001 e 9.000": 8000,
-  "Entre 9.001 e 12.000": 10500,
-  "Entre 12.001 e 15.000": 13500,
-  "Entre 15.001 e 20.000": 17500,
-  "Entre 20.001 e 30.000": 25000,
-  "Entre 30.001 e 40.000": 35000,
-  "Entre 40.001 e 50.000": 45000,
-  "Acima de 50.000": 60000,
-};
+// Corte de amostra: abaixo disso a média da categoria vira ruído. Na prática só filtra as
+// listas longas (linguagens, frameworks, áreas) — as dimensões ordinais já são populosas.
+const MIN_SAMPLE = 30;
 
-function midpoints(index) {
-  return index.map((label) => {
-    const m = BRACKET_MIDPOINTS[label];
-    if (m === undefined) throw new Error("Faixa desconhecida: " + label);
-    return m;
-  });
-}
-
-// table: {columns:[...], index:[bracket labels...], data: [ [count por coluna] por linha de faixa ]}
-// Retorna, por coluna: {n, mean}
-function weightedMeansByColumn(table) {
-  const mids = midpoints(table.index);
-  const result = {};
-  table.columns.forEach((col, colIdx) => {
-    let n = 0;
-    let sum = 0;
-    table.data.forEach((row, rowIdx) => {
-      const c = row[colIdx] || 0;
-      n += c;
-      sum += c * mids[rowIdx];
-    });
-    result[col] = { n, mean: n > 0 ? sum / n : null };
-  });
-  return result;
-}
-
-function overallWeightedMean(table) {
-  const mids = midpoints(table.index);
-  let n = 0;
-  let sum = 0;
-  table.data.forEach((row, rowIdx) => {
-    const rowTotal = row.reduce((a, b) => a + b, 0);
-    n += rowTotal;
-    sum += rowTotal * mids[rowIdx];
-  });
-  return { n, mean: sum / n };
-}
-
-// Constrói dimensão pronta para a calculadora: cada opção com média, contagem e índice (média/overallMean)
-function buildDimension(table, overallMean, minSample = 15) {
+function buildDimension(table, { minSample = MIN_SAMPLE, withPercentiles = false } = {}) {
   const means = weightedMeansByColumn(table);
-  // Mantém a ordem original das colunas da tabela: para dimensões ordinais
-  // (nível, experiência, formação, inglês) isso preserva a ordem lógica;
-  // para as demais (UF, linguagens, frameworks, área) a fonte já vem em ordem alfabética.
-  const options = table.columns
-    .filter((label) => means[label] && means[label].n >= minSample && means[label].mean !== null)
-    .map((label) => {
-      const v = means[label];
-      return {
-        label,
-        n: v.n,
-        mean: Math.round(v.mean),
-        index: +(v.mean / overallMean).toFixed(4),
+  return table.columns
+    .map((label, colIdx) => ({ label, colIdx, ...means[label] }))
+    .filter((o) => o.n >= minSample && o.mean != null)
+    .map((o) => {
+      const d = dispersionForColumn(table, o.colIdx);
+      const entry = {
+        label: o.label,
+        n: o.n,
+        mean: Math.round(o.mean),
+        index: +(o.mean / overallMean).toFixed(4),
+        // Coeficiente de variação da categoria: define a precisão amostral da sua média
+        // (Var(ln média) ≈ CV²/n) e alimenta o intervalo de confiança na interface.
+        cv: d.cv != null ? +d.cv.toFixed(3) : null,
       };
+      if (withPercentiles && d.p25 && d.p75) {
+        // Guardados como razão sobre a média da categoria, para poder aplicar a dispersão
+        // observada a uma estimativa combinada.
+        entry.p25r = +(d.p25 / o.mean).toFixed(3);
+        entry.p50r = +(d.p50 / o.mean).toFixed(3);
+        entry.p75r = +(d.p75 / o.mean).toFixed(3);
+      }
+      return entry;
     });
-  return options;
 }
-
-const { mean: overallMean2026, n: totalN2026 } = overallWeightedMean(raw2026.salary_by_level);
 
 const dimensions = {
-  level: buildDimension(raw2026.salary_by_level, overallMean2026, 1),
-  experience: buildDimension(raw2026.salary_by_experience, overallMean2026, 1),
-  area: buildDimension(raw2026.salary_by_area, overallMean2026, 15),
-  languages: buildDimension(raw2026.salary_by_languages, overallMean2026, 15),
-  frameworks: buildDimension(frameworks2026.salary_by_frameworks, overallMean2026, 15),
-  uf: buildDimension(raw2026.salary_by_brazil_uf, overallMean2026, 1),
-  graduation: buildDimension(raw2026.salary_by_graduation, overallMean2026, 1),
-  workModel: buildDimension(raw2026.salary_by_work_model, overallMean2026, 1),
-  sector: buildDimension(raw2026.salary_by_sector, overallMean2026, 1),
-  englishLevel: buildDimension(raw2026.salary_by_english_level, overallMean2026, 1),
-  foreignJob: buildDimension(raw2026.salary_by_foreign_job, overallMean2026, 1),
+  // Nível é a âncora do modelo e guarda a dispersão real observada.
+  level: buildDimension(data.raw.salary_by_level, { minSample: 1, withPercentiles: true }),
+  experience: buildDimension(data.raw.salary_by_experience, { minSample: 1 }),
+  graduation: buildDimension(data.raw.salary_by_graduation, { minSample: 1 }),
+  area: buildDimension(data.raw.salary_by_area),
+  languages: buildDimension(data.raw.salary_by_languages),
+  frameworks: buildDimension(data.frameworks.salary_by_frameworks),
+  uf: buildDimension(data.raw.salary_by_brazil_uf),
+  workModel: buildDimension(data.raw.salary_by_work_model, { minSample: 1 }),
+  sector: buildDimension(data.raw.salary_by_sector, { minSample: 1 }),
+  englishLevel: buildDimension(data.raw.salary_by_english_level, { minSample: 1 }),
+  foreignJob: buildDimension(data.raw.salary_by_foreign_job, { minSample: 1 }),
 };
 
-// Ordena tecnologias/frameworks pela média salarial nas listas para facilitar
-// eventual uso de "top pagos", mantendo a ordem por amostra como padrão da UI.
+const { weights, detail, fallback, unidentified } = measureAttenuations(
+  data.raw, data.crosstabs, data.frameworksCross, data.levelXWorkModel, data.frameworks
+);
 
-// Dados do ano anterior (2025) só para exibir tendência (delta%) em nível, modelo de contratação,
-// UF e linguagens — dimensões disponíveis no snapshot embutido da página.
-const { mean: overallMean2025 } = overallWeightedMean(raw2025.salary_by_level);
-const trend2025 = {
-  overallMean: Math.round(overallMean2025),
-  level: buildDimension(raw2025.salary_by_level, overallMean2025, 1),
-  workModel: buildDimension(raw2025.salary_by_work_model, overallMean2025, 1),
-  uf: buildDimension(raw2025.salary_by_brazil_uf, overallMean2025, 1),
-  languages: buildDimension(raw2025.salary_by_languages, overallMean2025, 1),
-};
+// Edição anterior (2025), só para o indicador de tendência.
+const { mean: overallMean2025 } = overallWeightedMean(data.raw2025.salary_by_level);
+function buildTrend(table) {
+  const means = weightedMeansByColumn(table);
+  const out = {};
+  table.columns.forEach((label) => {
+    const v = means[label];
+    if (v && v.n >= MIN_SAMPLE && v.mean) out[label] = Math.round(v.mean);
+  });
+  return out;
+}
 
 const output = {
   meta: {
-    source: "Pesquisa Salarial de Programadores 2026 - Código Fonte TV",
+    source: "Pesquisa Salarial de Programadores 2026 — Código Fonte TV",
     sourceUrl: "https://pesquisa.codigofonte.com.br/2026",
     collectedAt: "23/02/2026 a 09/06/2026",
-    totalResponses: totalN2026,
-    overallMean: Math.round(overallMean2026),
-    generatedAt: new Date().toISOString(),
-    note: "Estimativas calculadas a partir de médias ponderadas por faixa salarial autodeclarada. Não é um censo — use como panorama de mercado.",
+    totalResponses,
+    overallMean: Math.round(overallMean),
+    overallCv: +overallStats.cv.toFixed(3),
+    overallP25r: +(overallDisp.p25 / overallMean).toFixed(3),
+    overallP50r: +(overallDisp.p50 / overallMean).toFixed(3),
+    overallP75r: +(overallDisp.p75 / overallMean).toFixed(3),
+    minSample: MIN_SAMPLE,
+    generatedAt: new Date().toISOString().slice(0, 10),
   },
+  weights,
+  // Dimensões sem cruzamento publicado: o efeito continua confundido com senioridade.
+  unidentified,
   dimensions,
-  trend2025,
+  trend2025: {
+    overallMean: Math.round(overallMean2025),
+    level: buildTrend(data.raw2025.salary_by_level),
+    workModel: buildTrend(data.raw2025.salary_by_work_model),
+    uf: buildTrend(data.raw2025.salary_by_brazil_uf),
+    languages: buildTrend(data.raw2025.salary_by_languages),
+  },
 };
 
 fs.mkdirSync(OUT_DIR, { recursive: true });
 fs.writeFileSync(path.join(OUT_DIR, "salary-data.json"), JSON.stringify(output));
-fs.writeFileSync(
-  path.join(OUT_DIR, "salary-data.js"),
-  "window.SALARY_DATA = " + JSON.stringify(output) + ";"
-);
+fs.writeFileSync(path.join(OUT_DIR, "salary-data.js"), "window.SALARY_DATA = " + JSON.stringify(output) + ";");
 
-console.log("Média geral 2026:", Math.round(overallMean2026), "| respostas:", totalN2026);
-console.log("Dimensões geradas:", Object.keys(dimensions).map((k) => `${k}(${dimensions[k].length})`).join(", "));
-console.log("Arquivo gerado em:", path.join(OUT_DIR, "salary-data.js"));
+const size = fs.statSync(path.join(OUT_DIR, "salary-data.js")).size;
+console.log(`Média geral: R$ ${Math.round(overallMean).toLocaleString("pt-BR")} | ${totalResponses.toLocaleString("pt-BR")} respostas | CV ${overallStats.cv.toFixed(3)}`);
+console.log(`Mediana: R$ ${Math.round(overallDisp.p50).toLocaleString("pt-BR")} | IQR R$ ${Math.round(overallDisp.p25).toLocaleString("pt-BR")}–${Math.round(overallDisp.p75).toLocaleString("pt-BR")}`);
+console.log("\nPesos medidos (atenuação após controlar por nível):");
+Object.entries(detail).forEach(([k, d]) => {
+  console.log(`  ${k.padEnd(12)} ${weights[k].toFixed(3)}  R²=${d.r2 != null ? d.r2.toFixed(2) : "n/a"}  ${d.method}`);
+});
+console.log(`  ${"(demais)".padEnd(12)} ${fallback.toFixed(3)}  média das medições — ${unidentified.join(", ")}`);
+console.log("\nDimensões:", Object.keys(dimensions).map((k) => `${k}(${dimensions[k].length})`).join(", "));
+console.log(`Gerado: public/salary-data.js (${(size / 1024).toFixed(1)} KB)`);

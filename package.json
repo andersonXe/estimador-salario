@@ -5,6 +5,11 @@
   "description": "Calculadora de salário de devs no Brasil, baseada na Pesquisa Salarial de Programadores 2026 (Código Fonte TV).",
   "scripts": {
     "build-data": "node build/process-data.js",
-    "start": "npx serve public -l 5173"
+    "validate": "node build/validate.js",
+    "analyze": "node build/analyze-weights.js",
+    "fit": "node build/fit-model.js",
+    "start": "npx serve public -l 5173",
+    "compare": "node build/compare-models.js",
+    "check": "npm run build-data && npm run validate && npm run compare"
   }
 }
