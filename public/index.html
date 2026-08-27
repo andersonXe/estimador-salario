@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Calculadora de Salário Dev — Pesquisa 2026</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="page">
+    <header class="hero">
+      <p class="eyebrow">Baseado na Pesquisa Salarial de Programadores 2026 · Código Fonte TV</p>
+      <h1>Quanto um dev com o seu perfil ganha no Brasil?</h1>
+      <p class="hero-sub">
+        Preencha os campos que fizerem sentido para o seu perfil. A estimativa é recalculada
+        automaticamente combinando as médias salariais reais de <strong id="hero-total">17.046</strong>
+        respostas da pesquisa.
+      </p>
+    </header>
+
+    <main class="layout">
+      <section class="panel form-panel" aria-label="Parâmetros do perfil">
+        <h2>Seu perfil</h2>
+
+        <div class="field">
+          <label for="level">Nível / senioridade</label>
+          <select id="level"><option value="">Não informar</option></select>
+        </div>
+
+        <div class="field">
+          <label for="experience">Tempo de experiência na TI</label>
+          <select id="experience"><option value="">Não informar</option></select>
+        </div>
+
+        <div class="field">
+          <label for="graduation">Formação educacional</label>
+          <select id="graduation"><option value="">Não informar</option></select>
+        </div>
+
+        <div class="field">
+          <label for="area">Área de atuação</label>
+          <select id="area"><option value="">Não informar</option></select>
+        </div>
+
+        <div class="field">
+          <label for="language">Linguagem principal</label>
+          <select id="language"><option value="">Não informar</option></select>
+        </div>
+
+        <div class="field">
+          <label for="framework">Framework / ferramenta principal</label>
+          <select id="framework"><option value="">Não informar</option></select>
+        </div>
+
+        <div class="field">
+          <label for="uf">Estado (UF)</label>
+          <select id="uf"><option value="">Não informar</option></select>
+        </div>
+
+        <div class="field">
+          <label for="workModel">Modelo de contratação</label>
+          <select id="workModel"><option value="">Não informar</option></select>
+        </div>
+
+        <div class="field">
+          <label for="sector">Setor</label>
+          <select id="sector"><option value="">Não informar</option></select>
+        </div>
+
+        <div class="field">
+          <label for="englishLevel">Nível de inglês</label>
+          <select id="englishLevel"><option value="">Não informar</option></select>
+        </div>
+
+        <div class="field">
+          <label for="foreignJob">Trabalha para empresa no exterior?</label>
+          <select id="foreignJob"><option value="">Não informar</option></select>
+        </div>
+
+        <button id="reset-btn" type="button" class="reset-btn">Limpar tudo</button>
+      </section>
+
+      <section class="panel result-panel" aria-label="Resultado da estimativa">
+        <h2>Estimativa de salário mensal</h2>
+
+        <div class="result-value">
+          <span class="currency">R$</span>
+          <span id="result-amount">11.039</span>
+        </div>
+        <p class="result-range">Faixa provável: <span id="result-range">R$ 8.800 — R$ 13.800</span></p>
+
+        <div class="confidence" id="confidence-box">
+          <span id="confidence-dot" class="dot"></span>
+          <span id="confidence-text">Sem filtros aplicados — exibindo a média geral da pesquisa.</span>
+        </div>
+
+        <div class="trend" id="trend-box" hidden>
+          <span id="trend-text"></span>
+        </div>
+
+        <h3 class="breakdown-title">Como chegamos nesse número</h3>
+        <ul id="breakdown-list" class="breakdown-list">
+          <li class="breakdown-empty">Selecione um ou mais critérios ao lado para personalizar a estimativa.</li>
+        </ul>
+
+        <p class="methodology">
+          <strong>Metodologia:</strong> cada critério selecionado desloca a média geral (R$
+          <span id="method-overall">11.039</span>) para cima ou para baixo, com base na variação real
+          observada naquele grupo na pesquisa — critérios mais determinantes (nível) pesam mais que
+          critérios correlacionados entre si (ex.: experiência, que já é parcialmente capturada pelo
+          nível). É uma estimativa estatística, não uma promessa de salário — amostragem por
+          conveniência, com viés possível.
+        </p>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>
+        Dados extraídos de
+        <a href="https://pesquisa.codigofonte.com.br/2026" target="_blank" rel="noopener">pesquisa.codigofonte.com.br/2026</a>
+        (6ª edição, coleta entre 23/02/2026 e 09/06/2026, 17.046 respondentes). Projeto independente, sem
+        vínculo oficial com o Código Fonte TV.
+      </p>
+    </footer>
+  </div>
+
+  <script src="salary-data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

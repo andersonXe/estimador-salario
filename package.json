@@ -1,0 +1,10 @@
+{
+  "name": "estimador-salario",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Calculadora de salário de devs no Brasil, baseada na Pesquisa Salarial de Programadores 2026 (Código Fonte TV).",
+  "scripts": {
+    "build-data": "node build/process-data.js",
+    "start": "npx serve public -l 5173"
+  }
+}
